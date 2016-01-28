@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Server.Kestrel.Http;
 using Microsoft.AspNetCore.Server.Kestrel.Networking;
 
@@ -41,6 +40,8 @@ namespace Microsoft.AspNetCore.Server.Kestrel
 
         public void Dispose()
         {
+            ConnectionManager.CloseAllConnections(TimeSpan.FromSeconds(5)).Wait();
+
             foreach (var thread in Threads)
             {
                 thread.Stop(TimeSpan.FromSeconds(2.5));
@@ -91,6 +92,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel
 
                     first = false;
                 }
+
                 return new Disposable(() =>
                 {
                     foreach (var listener in listeners)

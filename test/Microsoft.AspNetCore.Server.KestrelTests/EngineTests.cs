@@ -23,8 +23,14 @@ namespace Microsoft.AspNetCore.Server.KestrelTests
     /// <summary>
     /// Summary description for EngineTests
     /// </summary>
-    public class EngineTests
+    public class EngineTests : IDisposable
     {
+        public void Dispose()
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+        }
+
         public static TheoryData<ServiceContext> ConnectionFilterData
         {
             get
@@ -39,6 +45,20 @@ namespace Microsoft.AspNetCore.Server.KestrelTests
                         {
                             ConnectionFilter = new PassThroughConnectionFilter()
                         }
+                    }
+                };
+            }
+        }
+
+
+        public static TheoryData<ServiceContext> NoConnectionFilterData
+        {
+            get
+            {
+                return new TheoryData<ServiceContext>
+                {
+                    {
+                        new TestServiceContext()
                     }
                 };
             }
@@ -115,7 +135,6 @@ namespace Microsoft.AspNetCore.Server.KestrelTests
             var address = ServerAddress.FromUrl("http://localhost:54321/");
             var started = engine.CreateServer(address);
 
-            Console.WriteLine("Started");
             var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             socket.Connect(new IPEndPoint(IPAddress.Loopback, 54321));
             socket.Send(Encoding.ASCII.GetBytes("POST / HTTP/1.0\r\n\r\nHello World"));
@@ -580,53 +599,58 @@ namespace Microsoft.AspNetCore.Server.KestrelTests
         [FrameworkSkipCondition(RuntimeFrameworks.Mono, SkipReason = "Test hangs after execution on Mono.")]
         public async Task ZeroContentLengthNotSetAutomaticallyForCertainStatusCodes(ServiceContext testContext)
         {
-            using (var server = new TestServer(async httpContext =>
-            {
-                var request = httpContext.Request;
-                var response = httpContext.Response;
-                response.Headers.Clear();
+            //for (int i = 0; i < 10; i++)
+            //{
+                using (var server = new TestServer(async httpContext =>
+                {
+                    var request = httpContext.Request;
+                    var response = httpContext.Response;
+                    response.Headers.Clear();
 
-                using (var reader = new StreamReader(request.Body, Encoding.ASCII))
+                    using (var reader = new StreamReader(request.Body, Encoding.ASCII))
+                    {
+                        var statusString = await reader.ReadLineAsync();
+                        response.StatusCode = int.Parse(statusString);
+                    }
+                }, testContext))
                 {
-                    var statusString = await reader.ReadLineAsync();
-                    response.StatusCode = int.Parse(statusString);
+                    using (var connection = new TestConnection())
+                    {
+                        await connection.SendEnd(
+                            "POST / HTTP/1.1",
+                            "Content-Length: 3",
+                            "",
+                            "101POST / HTTP/1.1",
+                            "Content-Length: 3",
+                            "",
+                            "204POST / HTTP/1.1",
+                            "Content-Length: 3",
+                            "",
+                            "205POST / HTTP/1.1",
+                            "Content-Length: 3",
+                            "",
+                            "304POST / HTTP/1.1",
+                            "Content-Length: 3",
+                            "",
+                            "200");
+                        await connection.ReceiveEnd(
+                            "HTTP/1.1 101 Switching Protocols",
+                            "",
+                            "HTTP/1.1 204 No Content",
+                            "",
+                            "HTTP/1.1 205 Reset Content",
+                            "",
+                            "HTTP/1.1 304 Not Modified",
+                            "",
+                            "HTTP/1.1 200 OK",
+                            "Content-Length: 0",
+                            "",
+                            "");
+                    }
                 }
-            }, testContext))
-            {
-                using (var connection = new TestConnection())
-                {
-                    await connection.SendEnd(
-                        "POST / HTTP/1.1",
-                        "Content-Length: 3",
-                        "",
-                        "101POST / HTTP/1.1",
-                        "Content-Length: 3",
-                        "",
-                        "204POST / HTTP/1.1",
-                        "Content-Length: 3",
-                        "",
-                        "205POST / HTTP/1.1",
-                        "Content-Length: 3",
-                        "",
-                        "304POST / HTTP/1.1",
-                        "Content-Length: 3",
-                        "",
-                        "200");
-                    await connection.ReceiveEnd(
-                        "HTTP/1.1 101 Switching Protocols",
-                        "",
-                        "HTTP/1.1 204 No Content",
-                        "",
-                        "HTTP/1.1 205 Reset Content",
-                        "",
-                        "HTTP/1.1 304 Not Modified",
-                        "",
-                        "HTTP/1.1 200 OK",
-                        "Content-Length: 0",
-                        "",
-                        "");
-                }
-            }
+            //    GC.Collect();
+            //    GC.WaitForPendingFinalizers();
+            //}
         }
 
         [ConditionalTheory]
@@ -1059,7 +1083,7 @@ namespace Microsoft.AspNetCore.Server.KestrelTests
                         throw;
                     }
 
-                    readTcs.SetCanceled();
+                    readTcs.SetException(new Exception("This shouldn't be reached."));
                 }
             }, testContext))
             {
@@ -1123,6 +1147,7 @@ namespace Microsoft.AspNetCore.Server.KestrelTests
                     for (int i = 0; i < 10; i++)
                     {
                         await response.WriteAsync(largeString, lifetime.RequestAborted);
+                        registrationWh.Wait(1000);
                     }
                 }
                 catch (Exception ex)

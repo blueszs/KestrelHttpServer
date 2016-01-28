@@ -21,6 +21,7 @@ namespace Microsoft.AspNetCore.Server.KestrelTests
             _logger = engine.Log;
         }
 
+        [Fact]
         public void InitAndCloseServerPipe()
         {
             var loop = new UvLoopHandle(_logger);
@@ -38,6 +39,7 @@ namespace Microsoft.AspNetCore.Server.KestrelTests
 
         }
 
+        [Fact(Skip = "Test needs to be fixed (UvException: Error -4082 EBUSY resource busy or locked from loop_close)")]
         public void ServerPipeListenForConnections()
         {
             var loop = new UvLoopHandle(_logger);
@@ -120,6 +122,7 @@ namespace Microsoft.AspNetCore.Server.KestrelTests
         }
 
 
+        [Fact(Skip = "Test needs to be fixed (UvException: Error -4088 EAGAIN resource temporarily unavailable from accept)")]
         public void ServerPipeDispatchConnections()
         {
             var pipeName = @"\\.\pipe\ServerPipeDispatchConnections" + Guid.NewGuid().ToString("n");

@@ -20,7 +20,6 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
         private const int _initialTaskQueues = 64;
         private const int _maxPooledWriteContexts = 32;
 
-        private static readonly WaitCallback _returnBlocks = (state) => ReturnBlocks((MemoryPoolBlock2)state);
         private static readonly Action<object> _connectionCancellation = (state) => ((SocketOutput)state).CancellationTriggered();
 
         private readonly KestrelThread _thread;
@@ -256,6 +255,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
         {
             MemoryPoolBlock2 blockToReturn = null;
 
+
             lock (_returnLock)
             {
                 Debug.Assert(!_lastStart.IsDefault);
@@ -277,7 +277,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
 
             if (blockToReturn != null)
             {
-                ThreadPool.QueueUserWorkItem(_returnBlocks, blockToReturn);
+                ReturnBlocks(blockToReturn);
             }
         }
 
@@ -618,9 +618,10 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
                     return;
                 }
 
+                // Ensure all blocks are returned before calling OnSocketClosed
+                Self.ReturnAllBlocks();
                 Self._socket.Dispose();
                 Self._connection.OnSocketClosed();
-                Self.ReturnAllBlocks();
                 Self._log.ConnectionStop(Self._connectionId);
                 CompleteWithContextLock();
             }
@@ -675,9 +676,11 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
             {
                 var block = _lockedStart.Block;
                 var end = _lockedEnd.Block;
+
+                block.Unpin();
+
                 if (block == end)
                 {
-                    end.Unpin();
                     return;
                 }
 
@@ -686,8 +689,11 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
                     block = block.Next;
                     block.Unpin();
                 }
+
+                block.Next.Unpin();
                 block.Next = null;
 
+                //ReturnWrittenBlocks(_lockedStart.Block);
                 ThreadPool.QueueUserWorkItem(_returnWrittenBlocks, _lockedStart.Block);
             }
 
@@ -698,7 +704,6 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
                     var returnBlock = block;
                     block = block.Next;
 
-                    returnBlock.Unpin();
                     returnBlock.Pool.Return(returnBlock);
                 }
             }

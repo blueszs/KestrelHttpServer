@@ -26,7 +26,8 @@ namespace Microsoft.AspNetCore.Server.KestrelTests
         {
             var trace = new KestrelTrace(new TestKestrelTrace());
             var ltp = new LoggingThreadPool(trace);
-            var socketInput = new SocketInput(new MemoryPool2(), ltp);
+            var pool = new MemoryPool2();
+            var socketInput = new SocketInput(pool, ltp);
             var headerCollection = new FrameRequestHeaders();
 
             var headerArray = Encoding.ASCII.GetBytes(rawHeaders);
@@ -40,6 +41,9 @@ namespace Microsoft.AspNetCore.Server.KestrelTests
             // Assert TakeMessageHeaders consumed all the input
             var scan = socketInput.ConsumingStart();
             Assert.True(scan.IsEnd);
+
+            socketInput.Dispose();
+            pool.Dispose();
         }
     }
 }

@@ -47,7 +47,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Infrastructure
         /// Thread-safe collection of blocks which are currently in the pool. A slab will pre-allocate all of the block tracking objects
         /// and add them to this collection. When memory is requested it is taken from here first, and when it is returned it is re-added.
         /// </summary>
-        private readonly ConcurrentQueue<MemoryPoolBlock2> _blocks = new ConcurrentQueue<MemoryPoolBlock2>();
+        public readonly ConcurrentQueue<MemoryPoolBlock2> _blocks = new ConcurrentQueue<MemoryPoolBlock2>();
 
         /// <summary>
         /// Thread-safe collection of slabs which have been allocated by this pool. As long as a slab is in this collection and slab.IsActive, 
@@ -161,6 +161,11 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Infrastructure
                     }
                 }
 
+                foreach (var block in _blocks)
+                {
+                    GC.SuppressFinalize(block);
+                }
+
                 // N/A: free unmanaged resources (unmanaged objects) and override a finalizer below.
 
                 // N/A: set large fields to null.
@@ -170,10 +175,11 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Infrastructure
         }
 
         // N/A: override a finalizer only if Dispose(bool disposing) above has code to free unmanaged resources.
-        // ~MemoryPool2() {
-        //   // Do not change this code. Put cleanup code in Dispose(bool disposing) above.
-        //   Dispose(false);
-        // }
+        // ~MemoryPool2()
+        //{
+        //    // Do not change this code. Put cleanup code in Dispose(bool disposing) above.
+        //    Dispose(false);
+        //}
 
         // This code added to correctly implement the disposable pattern.
         public void Dispose()
@@ -181,7 +187,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Infrastructure
             // Do not change this code. Put cleanup code in Dispose(bool disposing) above.
             Dispose(true);
             // N/A: uncomment the following line if the finalizer is overridden above.
-            // GC.SuppressFinalize(this);
+            GC.SuppressFinalize(this);
         }
     }
 }

@@ -138,6 +138,9 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
             }
 
             var connection = new Connection(this, acceptSocket);
+
+            acceptSocket.Connection = connection;
+
             connection.Start();
         }
 
@@ -166,6 +169,12 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
                 Thread.Send(listener =>
                 {
                     listener.DispatchPipe.Dispose();
+
+                    while (WriteReqPool.Count > 0)
+                    {
+                        WriteReqPool.Dequeue().Dispose();
+                    }
+
                     listener.FreeBuffer();
                 }, this);
             }

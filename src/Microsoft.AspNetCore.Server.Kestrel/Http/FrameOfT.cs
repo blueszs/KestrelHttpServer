@@ -162,7 +162,6 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
                         finally
                         {
                             // Ensure we *always* disconnect the socket.
-                            // Dispose socket
                             ConnectionControl.End(ProduceEndType.SocketDisconnect);
                         }
                     }

@@ -74,6 +74,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
         protected virtual void DispatchConnection(UvStreamHandle socket)
         {
             var connection = new Connection(this, socket);
+            socket.Connection = connection;
             connection.Start();
         }
 

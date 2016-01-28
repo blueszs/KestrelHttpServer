@@ -45,6 +45,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel
         private ExceptionDispatchInfo _closeError;
         private readonly IKestrelTrace _log;
         private readonly IThreadPool _threadPool;
+        private readonly MemoryPool2 _memoryPool;
 
         public KestrelThread(KestrelEngine engine)
         {
@@ -56,10 +57,14 @@ namespace Microsoft.AspNetCore.Server.Kestrel
             _post = new UvAsyncHandle(_log);
             _thread = new Thread(ThreadStart);
             _thread.Name = "KestrelThread - libuv";
+            _memoryPool = new MemoryPool2();
             QueueCloseHandle = PostCloseHandle;
         }
 
         public UvLoopHandle Loop { get { return _loop; } }
+
+        public MemoryPool2 MemoryPool => _memoryPool;
+
         public ExceptionDispatchInfo FatalError { get { return _closeError; } }
 
         public Action<Action<IntPtr>, IntPtr> QueueCloseHandle { get; internal set; }
@@ -78,7 +83,8 @@ namespace Microsoft.AspNetCore.Server.Kestrel
                 return;
             }
 
-            var stepTimeout = (int)(timeout.TotalMilliseconds / 3); 
+
+            var stepTimeout = (int)(timeout.TotalMilliseconds / 3);
 
             Post(t => t.OnStop());
             if (!_thread.Join(stepTimeout))
@@ -109,6 +115,8 @@ namespace Microsoft.AspNetCore.Server.Kestrel
                     }
                 }
             }
+
+            _memoryPool.Dispose();
 
             if (_closeError != null)
             {
@@ -286,7 +294,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel
                 _closeError = ExceptionDispatchInfo.Capture(ex);
                 // Request shutdown so we can rethrow this exception
                 // in Stop which should be observable.
-                _appLifetime.StopApplication();
+                //_appLifetime.StopApplication();
             }
         }
 

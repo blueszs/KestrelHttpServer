@@ -30,6 +30,8 @@ namespace Microsoft.AspNetCore.Server.KestrelTests
             var buffer2 = new byte[1024];
             var count2 = stream.Read(buffer2, 0, 1024);
             Assert.Equal(0, count2);
+
+            input.Dispose();
         }
 
         [Fact]
@@ -48,6 +50,8 @@ namespace Microsoft.AspNetCore.Server.KestrelTests
             var buffer2 = new byte[1024];
             var count2 = await stream.ReadAsync(buffer2, 0, 1024);
             Assert.Equal(0, count2);
+
+            input.Dispose();
         }
 
         [Fact]
@@ -77,6 +81,8 @@ namespace Microsoft.AspNetCore.Server.KestrelTests
 
             var count3 = await stream.ReadAsync(readBuffer, 0, 8192);
             Assert.Equal(0, count3);
+
+            input.Dispose();
         }
 
         private void AssertASCII(string expected, ArraySegment<byte> actual)

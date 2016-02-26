@@ -120,7 +120,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
             var contentLength = headers.HeaderContentLength.ToString();
             if (contentLength.Length > 0)
             {
-                return new ForContentLength(keepAlive, int.Parse(contentLength), context);
+                return new ForContentLength(keepAlive, long.Parse(contentLength), context);
             }
 
             if (keepAlive)
@@ -146,10 +146,10 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
 
         private class ForContentLength : MessageBody
         {
-            private readonly int _contentLength;
-            private int _inputLength;
+            private readonly long _contentLength;
+            private long _inputLength;
 
-            public ForContentLength(bool keepAlive, int contentLength, FrameContext context)
+            public ForContentLength(bool keepAlive, long contentLength, FrameContext context)
                 : base(context)
             {
                 RequestKeepAlive = keepAlive;
@@ -161,7 +161,8 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Http
             {
                 var input = _context.SocketInput;
 
-                var limit = buffer.Array == null ? _inputLength : Math.Min(buffer.Count, _inputLength);
+                var inputLengthLimit = (int)Math.Min(_inputLength, int.MaxValue);
+                var limit = buffer.Array == null ? inputLengthLimit : Math.Min(buffer.Count, inputLengthLimit);
                 if (limit == 0)
                 {
                     return 0;

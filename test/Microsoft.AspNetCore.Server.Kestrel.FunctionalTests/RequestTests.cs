@@ -1,8 +1,11 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Sockets;
 using System.Text;
@@ -12,6 +15,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Testing.xunit;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Net.Http.Headers;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Xunit;
@@ -72,6 +76,72 @@ namespace Microsoft.AspNetCore.Server.Kestrel.FunctionalTests
                     response.EnsureSuccessStatusCode();
                     var sizeString = await response.Content.ReadAsStringAsync();
                     Assert.Equal(sizeString, bytes.Length.ToString(CultureInfo.InvariantCulture));
+                }
+            }
+        }
+
+        [Fact]
+        public async Task LargeMultipartUpload()
+        {
+            var port = PortManager.GetPort();
+            var config = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string>
+                {
+                    { "server.urls", $"http://localhost:{port}/" }
+                })
+                .Build();
+
+            var builder = new WebHostBuilder()
+                .UseConfiguration(config)
+                .UseServer("Microsoft.AspNetCore.Server.Kestrel")
+                .Configure(app =>
+                {
+                    app.Run(async context =>
+                    {
+                        long total = 0;
+                        var bytes = new byte[1024];
+                        var count = await context.Request.Body.ReadAsync(bytes, 0, bytes.Length);
+                        while (count > 0)
+                        {
+                            total += count;
+                            count = await context.Request.Body.ReadAsync(bytes, 0, bytes.Length);
+                        }
+                        await context.Response.WriteAsync(total.ToString(CultureInfo.InvariantCulture));
+                    });
+                });
+
+            using (var host = builder.Build())
+            {
+                host.Start();
+
+                using (var client = new HttpClient())
+                {
+                    using (var form = new MultipartFormDataContent())
+                    {
+                        const int oneGigabyte = 1024 * 1024 * 1024;
+                        const int files = 2;
+
+                        for (int i = 0; i < files; i++)
+                        {
+                            var fileName = Guid.NewGuid().ToString();
+                            var bytes = new byte[oneGigabyte];
+                            new Random().NextBytes(bytes);
+                            var content = new ByteArrayContent(bytes);
+                            content.Headers.ContentDisposition = new System.Net.Http.Headers.ContentDispositionHeaderValue("form-data")
+                            {
+                                Name = "\"files\"",
+                                FileName = "\"" + fileName + "\""
+                            };
+                            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
+
+                            form.Add(new ByteArrayContent(bytes), "file", fileName);
+                        }
+
+                        var length = form.Headers.ContentLength.Value;
+                        var response = await client.PostAsync($"http://localhost:{port}/", form);
+                        response.EnsureSuccessStatusCode();
+                        Assert.Equal(length.ToString(CultureInfo.InvariantCulture), await response.Content.ReadAsStringAsync());
+                    }
                 }
             }
         }
